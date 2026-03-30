@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseScore — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui,-apple-system,sans-serif; background: #f9fafb; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 220px; min-height: 100vh; background: #fff;
+      border-right: 1px solid #e5e7eb; padding: 20px 0; flex-shrink: 0;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-logo { padding: 4px 20px 20px; font-weight: 800; font-size: 17px; color: #1a1a2e; border-bottom: 1px solid #f3f4f6; }
+    .sidebar-logo span { color: #6366f1; }
+    .sidebar-section { padding: 16px 20px 8px; font-size: 10px; font-weight: 700; color: #9ca3af; letter-spacing: 0.1em; text-transform: uppercase; }
+    .project-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 20px;
+      font-size: 13px; color: #374151; cursor: pointer; border-radius: 0;
+      transition: background 0.1s;
+    }
+    .project-item:hover { background: #f3f4f6; }
+    .project-item.active { background: #eef2ff; color: #6366f1; font-weight: 600; }
+    .project-dot { width: 8px; height: 8px; border-radius: 50%; background: #6366f1; flex-shrink: 0; }
+    .new-project-btn {
+      display: flex; align-items: center; gap: 8px; margin: 8px 12px;
+      padding: 8px 12px; border: 1.5px dashed #d1d5db; border-radius: 8px;
+      font-size: 13px; color: #6b7280; cursor: pointer; background: none;
+      transition: border-color 0.15s, color 0.15s; text-align: left;
+    }
+    .new-project-btn:hover { border-color: #6366f1; color: #6366f1; }
+    .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid #f3f4f6; }
+    .sidebar-footer a { font-size: 12px; color: #9ca3af; text-decoration: none; }
+    .sidebar-footer a:hover { color: #6366f1; }
+
+    /* Main */
+    .main { flex: 1; overflow: auto; }
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 0 32px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar-title { font-weight: 700; font-size: 16px; }
+    .topbar-actions { display: flex; gap: 8px; }
+    .btn-sm {
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; text-decoration: none; transition: background 0.15s;
+    }
+    .btn-sm.primary { background: #6366f1; color: #fff; }
+    .btn-sm.primary:hover { background: #4f46e5; }
+    .btn-sm.outline { background: #fff; color: #374151; border: 1.5px solid #d1d5db; }
+    .btn-sm.outline:hover { border-color: #6366f1; color: #6366f1; }
+
+    .content { padding: 28px 32px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 28px; border-bottom: 1px solid #e5e7eb; }
+    .tab {
+      padding: 10px 18px; font-size: 14px; font-weight: 500; color: #6b7280;
+      cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: #374151; }
+    .tab.active { color: #6366f1; border-bottom-color: #6366f1; font-weight: 600; }
+
+    /* Tab panels */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* NPS Score cards */
+    .score-grid { display: grid; grid-template-columns: 200px 1fr; gap: 24px; margin-bottom: 28px; }
+    @media (max-width: 700px) { .score-grid { grid-template-columns: 1fr; } }
+
+    .nps-card {
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 28px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    }
+    .nps-number { font-size: 60px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+    .nps-number.positive { color: #059669; }
+    .nps-number.neutral { color: #f59e0b; }
+    .nps-number.negative { color: #ef4444; }
+    .nps-label { font-size: 12px; color: #9ca3af; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .nps-total { font-size: 13px; color: #6b7280; margin-top: 8px; }
+
+    .breakdown-card {
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 28px;
+      display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    }
+    .breakdown-row { display: flex; align-items: center; gap: 12px; }
+    .breakdown-label { font-size: 13px; font-weight: 600; width: 90px; }
+    .breakdown-label.promoter { color: #059669; }
+    .breakdown-label.passive { color: #f59e0b; }
+    .breakdown-label.detractor { color: #ef4444; }
+    .breakdown-bar-track { flex: 1; height: 10px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+    .breakdown-bar-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+    .breakdown-bar-fill.promoter { background: #10b981; }
+    .breakdown-bar-fill.passive { background: #fbbf24; }
+    .breakdown-bar-fill.detractor { background: #f87171; }
+    .breakdown-pct { font-size: 13px; font-weight: 700; width: 40px; text-align: right; color: #374151; }
+
+    /* Chart */
+    .chart-card {
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 24px;
+      margin-bottom: 28px;
+    }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .chart-title { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+    .chart-meta { font-size: 12px; color: #9ca3af; }
+    .chart-wrap { height: 220px; position: relative; }
+
+    /* Responses table */
+    .table-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    .table-header { padding: 16px 20px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; }
+    .table-title { font-size: 14px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 11px 16px; border-bottom: 1px solid #f9fafb; color: #374151; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+    .score-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 6px; font-weight: 800; font-size: 13px;
+    }
+    .score-badge.promoter { background: #dcfce7; color: #166534; }
+    .score-badge.passive { background: #fef3c7; color: #92400e; }
+    .score-badge.detractor { background: #fee2e2; color: #b91c1c; }
+    .segment-tag { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .segment-tag.promoter { background: #dcfce7; color: #166534; }
+    .segment-tag.passive { background: #fef3c7; color: #92400e; }
+    .segment-tag.detractor { background: #fee2e2; color: #b91c1c; }
+    .comment-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6b7280; font-size: 12px; }
+
+    /* Send survey tab */
+    .panel-inner { max-width: 600px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    textarea, input[type=text] {
+      width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px;
+      padding: 10px 14px; font-size: 14px; font-family: inherit;
+      color: #1a1a2e; background: #fff; resize: vertical;
+      transition: border-color 0.15s;
+    }
+    textarea:focus, input[type=text]:focus { outline: none; border-color: #6366f1; }
+    .form-hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+
+    /* Install Widget tab */
+    .snippet-box {
+      background: #1e1e2e; border-radius: 8px; padding: 16px 20px;
+      font-family: 'Courier New', monospace; font-size: 13px; color: #a5b4fc;
+      margin: 12px 0; position: relative; overflow-x: auto;
+    }
+    .copy-btn {
+      position: absolute; top: 10px; right: 10px; background: #6366f1; color: #fff;
+      border: none; border-radius: 5px; padding: 4px 10px; font-size: 12px;
+      cursor: pointer; font-weight: 600;
+    }
+    .copy-btn:hover { background: #4f46e5; }
+    .widget-preview-wrap {
+      border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 20px;
+      background: #f9fafb; position: relative; min-height: 200px;
+    }
+    .widget-preview-label { font-size: 12px; color: #9ca3af; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .nps-widget-inline {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 20px 24px; max-width: 380px; margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .nps-widget-inline h4 { font-size: 14px; font-weight: 700; margin: 0 0 16px; color: #1a1a2e; }
+    .score-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .score-btn {
+      width: 36px; height: 36px; border: 1.5px solid #d1d5db; border-radius: 6px;
+      font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; color: #374151;
+      transition: all 0.1s;
+    }
+    .score-btn:hover, .score-btn.selected { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .score-labels { display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af; margin-bottom: 16px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; background: #1a1a2e; color: #fff;
+      padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
+      opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s;
+      z-index: 1000;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* Settings tab */
+    .settings-section { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-bottom: 20px; max-width: 560px; }
+    .settings-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">Pulse<span>Score</span></div>
+  <div class="sidebar-section">Projects</div>
+  <div class="project-item active">
+    <div class="project-dot"></div>
+    My SaaS Product
+  </div>
+  <button class="new-project-btn" onclick="showNewProjectDialog()">
+    <span style="font-size:18px;line-height:1">+</span> New Project
+  </button>
+  <div class="sidebar-footer">
+    <a href="/">← Back to landing</a>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="project-name">My SaaS Product</div>
+    <div class="topbar-actions">
+      <a href="/api/export" class="btn-sm outline" download>Export CSV</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('overview')">Overview</div>
+      <div class="tab" onclick="switchTab('responses')">Responses</div>
+      <div class="tab" onclick="switchTab('send-survey')">Send Survey</div>
+      <div class="tab" onclick="switchTab('install-widget')">Install Widget</div>
+      <div class="tab" onclick="switchTab('settings')">Settings</div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="tab-overview" class="tab-panel active">
+      <div class="score-grid">
+        <div class="nps-card">
+          <div class="nps-number positive" id="nps-score">—</div>
+          <div class="nps-label">NPS Score</div>
+          <div class="nps-total" id="nps-total">Loading...</div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-row">
+            <span class="breakdown-label promoter">Promoters</span>
+            <div class="breakdown-bar-track"><div class="breakdown-bar-fill promoter" id="bar-promoter" style="width:0%"></div></div>
+            <span class="breakdown-pct" id="pct-promoter">—</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label passive">Passives</span>
+            <div class="breakdown-bar-track"><div class="breakdown-bar-fill passive" id="bar-passive" style="width:0%"></div></div>
+            <span class="breakdown-pct" id="pct-passive">—</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label detractor">Detractors</span>
+            <div class="breakdown-bar-track"><div class="breakdown-bar-fill detractor" id="bar-detractor" style="width:0%"></div></div>
+            <span class="breakdown-pct" id="pct-detractor">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">NPS Trend — Last 30 days</span>
+          <span class="chart-meta" id="chart-meta"></span>
+        </div>
+        <div class="chart-wrap"><canvas id="npsChart"></canvas></div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-title">Recent responses</span>
+          <a href="/api/export" class="btn-sm outline" download>Download CSV</a>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Score</th><th>Comment</th><th>Email</th><th>Segment</th>
+            </tr>
+          </thead>
+          <tbody id="responses-tbody">
+            <tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RESPONSES TAB -->
+    <div id="tab-responses" class="tab-panel">
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-title">All responses</span>
+          <a href="/api/export" class="btn-sm outline" download>Download CSV</a>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Score</th><th>Comment</th><th>Email</th><th>Segment</th>
+            </tr>
+          </thead>
+          <tbody id="all-responses-tbody">
+            <tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SEND SURVEY TAB -->
+    <div id="tab-send-survey" class="tab-panel">
+      <div class="panel-inner">
+        <h3 style="margin:0 0 20px;font-size:18px;font-weight:800">Send NPS survey by email</h3>
+        <div class="form-group">
+          <label for="email-list">Email addresses</label>
+          <textarea id="email-list" rows="6" placeholder="alex@example.com&#10;morgan@company.io&#10;jordan@startup.co"></textarea>
+          <div class="form-hint">One address per line, or comma-separated.</div>
+        </div>
+        <button class="btn-sm primary" style="font-size:14px;padding:10px 24px" onclick="sendSurvey()">
+          Send NPS Survey
+        </button>
+      </div>
+    </div>
+
+    <!-- INSTALL WIDGET TAB -->
+    <div id="tab-install-widget" class="tab-panel">
+      <div class="panel-inner">
+        <h3 style="margin:0 0 8px;font-size:18px;font-weight:800">Embed your NPS widget</h3>
+        <p style="color:#6b7280;font-size:14px;margin:0 0 20px">
+          Copy and paste this snippet into your app's <code>&lt;head&gt;</code> or before <code>&lt;/body&gt;</code>.
+          The widget will appear in the bottom-right corner of your page.
+        </p>
+
+        <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px">Your embed code</label>
+        <div class="snippet-box" id="snippet-box">
+          <span id="snippet-text">&lt;script src="https://your-replit-url.repl.co/widget.js" data-survey-id="proj-demo-001"&gt;&lt;/script&gt;</span>
+          <button class="copy-btn" onclick="copySnippet()">Copy</button>
+        </div>
+
+        <div class="widget-preview-wrap">
+          <div class="widget-preview-label">Widget preview</div>
+          <div class="nps-widget-inline">
+            <h4>How likely are you to recommend us?</h4>
+            <div class="score-buttons" id="preview-btns">
+              <!-- filled by JS -->
+            </div>
+            <div class="score-labels">
+              <span>Not likely</span><span>Extremely likely</span>
+            </div>
+            <div id="preview-comment-row" style="display:none">
+              <textarea rows="2" placeholder="What's the main reason for your score?" style="margin-bottom:12px;font-size:13px"></textarea>
+              <button class="btn-sm primary" style="font-size:13px">Submit →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div id="tab-settings" class="tab-panel">
+      <div class="settings-section">
+        <div class="settings-title">Webhook</div>
+        <div class="form-group">
+          <label for="webhook-url">Webhook URL</label>
+          <input type="text" id="webhook-url" placeholder="https://hooks.slack.com/services/...">
+          <div class="form-hint">We'll POST a JSON payload to this URL on every new response.</div>
+        </div>
+        <button class="btn-sm primary" style="font-size:13px" onclick="testWebhook()">Fire test webhook</button>
+      </div>
+      <div class="settings-section">
+        <div class="settings-title">Project</div>
+        <div class="form-group">
+          <label>Project ID</label>
+          <input type="text" value="proj-demo-001" disabled style="background:#f3f4f6;color:#9ca3af">
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/dashboard.js"></script>
+</body>
+</html>
